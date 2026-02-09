@@ -1,0 +1,155 @@
+/* ==========================================================
+   doctor_appointment_db - Schema + Test Data (Proper Order)
+   - Creates DB
+   - Creates tables in FK-safe order
+   - Creates indexes after tables
+   - (Optional) Truncates tables in FK-safe order
+   - Inserts test data in FK-safe order
+   ========================================================== */
+
+CREATE DATABASE IF NOT EXISTS doctor_appointment_db;
+USE doctor_appointment_db;
+
+/* =========================
+   1) TABLES (Create Order)
+   - parents first, then children (FKs)
+   ========================= */
+
+-- Patients (parent for appointments)
+CREATE TABLE IF NOT EXISTS patients (
+  patient_id INT AUTO_INCREMENT PRIMARY KEY,
+  first_name VARCHAR(50) NOT NULL,
+  last_name  VARCHAR(50) NOT NULL,
+  date_of_birth DATE NOT NULL,
+  gender VARCHAR(20),
+  phone VARCHAR(30),
+  email VARCHAR(120),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Doctors (parent for doctor_availability + appointments)
+CREATE TABLE IF NOT EXISTS doctors (
+  doctor_id INT AUTO_INCREMENT PRIMARY KEY,
+  first_name VARCHAR(50) NOT NULL,
+  last_name  VARCHAR(50) NOT NULL,
+  specialty  VARCHAR(80) NOT NULL,
+  phone VARCHAR(30),
+  email VARCHAR(120),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Users (independent / optional; no FKs)
+CREATE TABLE IF NOT EXISTS users (
+  user_id INT AUTO_INCREMENT PRIMARY KEY,
+  username VARCHAR(50) UNIQUE NOT NULL,
+  password_hash VARCHAR(255) NOT NULL,
+  role ENUM('PATIENT','DOCTOR','ADMIN') NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Doctor availability (child of doctors)
+CREATE TABLE IF NOT EXISTS doctor_availability (
+  availability_id INT AUTO_INCREMENT PRIMARY KEY,
+  doctor_id INT NOT NULL,
+  available_date DATE NOT NULL,
+  start_time TIME NOT NULL,
+  end_time TIME NOT NULL,
+  FOREIGN KEY (doctor_id) REFERENCES doctors(doctor_id) ON DELETE CASCADE
+);
+
+-- Appointments (child of patients + doctors)
+CREATE TABLE IF NOT EXISTS appointments (
+  appointment_id INT AUTO_INCREMENT PRIMARY KEY,
+  patient_id INT NOT NULL,
+  doctor_id  INT NOT NULL,
+  start_time DATETIME NOT NULL,
+  end_time   DATETIME NOT NULL,
+  status ENUM('BOOKED','CONFIRMED','COMPLETED','CANCELLED','NO_SHOW') NOT NULL DEFAULT 'BOOKED',
+  reason VARCHAR(255),
+  cancel_reason VARCHAR(255),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+  CONSTRAINT fk_appt_patient FOREIGN KEY (patient_id) REFERENCES patients(patient_id) ON DELETE CASCADE,
+  CONSTRAINT fk_appt_doctor  FOREIGN KEY (doctor_id)  REFERENCES doctors(doctor_id)  ON DELETE CASCADE
+);
+
+/* =========================
+   2) INDEXES (After tables)
+   ========================= */
+
+CREATE INDEX idx_doctor_avail_lookup
+  ON doctor_availability(doctor_id, available_date, start_time);
+
+CREATE UNIQUE INDEX uq_doctor_start_time
+  ON appointments(doctor_id, start_time);
+
+
+/* ==========================================================
+   3) OPTIONAL RESET (Truncate Order)
+   - If you rerun inserts often, uncomment this block.
+   ========================================================== */
+-- SET FOREIGN_KEY_CHECKS=0;
+-- TRUNCATE TABLE appointments;
+-- TRUNCATE TABLE doctor_availability;
+-- TRUNCATE TABLE users;
+-- TRUNCATE TABLE doctors;
+-- TRUNCATE TABLE patients;
+-- SET FOREIGN_KEY_CHECKS=1;
+
+
+/* =========================
+   4) INSERT TEST DATA
+   Insert Order (FK-safe):
+   1) patients
+   2) doctors
+   3) users
+   4) doctor_availability (needs doctors)
+   5) appointments (needs patients + doctors)
+   ========================= */
+
+-- 4.1) patients (10 inserts)
+INSERT INTO patients (patient_id, first_name, last_name, date_of_birth, gender, phone, email)
+VALUES
+(1, 'Jordan',  'Miller',   '1988-04-12', 'Male',   '312-555-0101', 'jordan.miller@example.com'),
+(2, 'Ava',     'Johnson',  '1992-11-30', 'Female', '312-555-0102', 'ava.johnson@example.com'),
+(3, 'Noah',    'Williams', '1979-07-18', 'Male',   '773-555-0103', 'noah.williams@example.com'),
+(4, 'Mia',     'Brown',    '1995-02-05', 'Female', '773-555-0104', 'mia.brown@example.com'),
+(5, 'Ethan',   'Davis',    '1984-09-22', 'Male',   '847-555-0105', 'ethan.davis@example.com');
+
+-- 4.2) doctors (10 inserts)
+INSERT INTO doctors (doctor_id, first_name, last_name, specialty, phone, email)
+VALUES
+(1, 'Amelia', 'Carter',    'Family Medicine',     '312-555-0201', 'amelia.carter@clinicdemo.com'),
+(2, 'Henry',  'Nguyen',    'Cardiology',          '312-555-0202', 'henry.nguyen@clinicdemo.com'),
+(3, 'Grace',  'Patel',     'Dermatology',         '773-555-0203', 'grace.patel@clinicdemo.com'),
+(4, 'Lucas',  'Reed',      'Orthopedics',         '773-555-0204', 'lucas.reed@clinicdemo.com'),
+(5, 'Chloe',  'Kim',       'Pediatrics',          '847-555-0205', 'chloe.kim@clinicdemo.com');
+
+-- 4.3) users (10 inserts)
+INSERT INTO users (user_id, username, password_hash, role)
+VALUES
+(1,  'patient_jmiller',   'HASH$jmiller$001',   'PATIENT'),
+(2,  'patient_ajohnson',  'HASH$ajohnson$002',  'PATIENT'),
+(3,  'patient_nwilliams', 'HASH$nwilliams$003', 'PATIENT'),
+(4,  'doctor_acarter',    'HASH$acarter$004',   'DOCTOR'),
+(5,  'doctor_hnguyen',    'HASH$hnguyen$005',   'DOCTOR');
+
+-- 4.4) doctor_availability (10 inserts)
+INSERT INTO doctor_availability (availability_id, doctor_id, available_date, start_time, end_time)
+VALUES
+(1,  1,  '2026-02-10', '09:00:00', '12:00:00'),
+(2,  2,  '2026-02-10', '13:00:00', '16:00:00'),
+(3,  3,  '2026-02-11', '10:00:00', '14:00:00'),
+(4,  4,  '2026-02-11', '08:00:00', '11:30:00'),
+(5,  5,  '2026-02-12', '09:30:00', '12:30:00');
+
+-- 4.5) appointments (10 inserts)
+INSERT INTO appointments
+(appointment_id, patient_id, doctor_id, start_time, end_time, status, reason, cancel_reason)
+VALUES
+(1,  1,  1,  '2026-02-10 09:00:00', '2026-02-10 09:30:00', 'CONFIRMED', 'Annual physical', NULL),
+(2,  2,  2,  '2026-02-10 13:00:00', '2026-02-10 13:45:00', 'BOOKED',    'Chest discomfort follow-up', NULL),
+(3,  3,  3,  '2026-02-11 10:00:00', '2026-02-11 10:20:00', 'COMPLETED', 'Skin rash evaluation', NULL),
+(4,  4,  4,  '2026-02-11 08:30:00', '2026-02-11 09:00:00', 'BOOKED',    'Knee pain consult', NULL),
+(5,  5,  5,  '2026-02-12 09:30:00', '2026-02-12 10:00:00', 'CONFIRMED', 'Pediatric wellness visit', NULL);
